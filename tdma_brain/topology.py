@@ -15,6 +15,12 @@ DEFAULT_RADIO_RANGE_M = 500.0
 RANGE_TOLERANCE_M = 1e-9  # a pair at exactly the range must stay a link despite float noise
 
 
+def validate_radio_range(radio_range):
+    """Raise InputError unless the radio range is a finite number of metres greater than 0."""
+    if not (math.isfinite(radio_range) and radio_range > 0):
+        raise InputError(f"radio range must be a finite number of metres greater than 0, got {radio_range}")
+
+
 def build_radio_graph(coords, radio_range=DEFAULT_RADIO_RANGE_M):
     """Build the radio graph G from {name: (x, y)} coordinates in metres.
 
@@ -22,8 +28,7 @@ def build_radio_graph(coords, radio_range=DEFAULT_RADIO_RANGE_M):
     when their distance is <= radio_range (inclusive, plus a 1e-9 tolerance); the edge
     carries the attribute `distance`. The range is kept in `G.graph["radio_range"]`.
     """
-    if not (math.isfinite(radio_range) and radio_range > 0):
-        raise InputError(f"radio range must be a finite number of metres greater than 0, got {radio_range}")
+    validate_radio_range(radio_range)
 
     names = sorted(coords, key=natural_key)
     # CONCEPT: Graph basics & NetworkX - a radio becomes a node (pos = its coordinates) and every link below becomes an edge
