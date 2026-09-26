@@ -1,0 +1,7 @@
+# Python virtual environment and caches
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Scratch output that is not evidence (the rest of results/ is tracked)
+results/tmp/
