@@ -5,3 +5,6 @@ __pycache__/
 
 # Scratch output that is not evidence (the rest of results/ is tracked)
 results/tmp/
+
+*.md
+*.pdf
