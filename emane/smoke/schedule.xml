@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Division 5 smoke schedule: 1 frame of 2 slots of 1 ms (100 us guard), NEM 1 transmits in slot 0, NEM 2 in slot 1.
+     A slot element with no child means TX; each NEM's unlisted slots become RX (full schedule = has <structure>).
+     Published with: emaneevent-tdmaschedule -i tdmabr0 emane/smoke/schedule.xml -->
+<emane-tdma-schedule>
+  <structure frames="1" slots="2" slotoverhead="100" slotduration="1000" bandwidth="1M"/>
+  <multiframe frequency="2.4G" power="0" class="0" datarate="11M">
+    <frame index="0">
+      <slot index="0" nodes="1"/>
+      <slot index="1" nodes="2"/>
+    </frame>
+  </multiframe>
+</emane-tdma-schedule>

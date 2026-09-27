@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nem SYSTEM "file:///usr/share/emane/dtd/nem.dtd">
+<!-- Division 5: the NEM definition shared by both smoke radios (from the emane-guide TDMA template).
+     CONCEPT: EMANE architecture - transport + MAC + PHY make one radio. -->
+<nem>
+  <transport definition="transvirtual.xml"/>
+  <mac definition="tdmaradiomodel.xml"/>
+  <phy>
+    <param name="fixedantennagain"       value="0.0"/>
+    <param name="fixedantennagainenable" value="on"/>
+    <param name="bandwidth"              value="1M"/>
+    <!-- noisemode=all: co-channel energy from other transmitters is counted, so collisions are modelled (D8 needs this) -->
+    <param name="noisemode"              value="all"/>
+    <!-- precomputed: pathloss comes only from the pathloss EVENTS we publish, so EMANE's topology is exactly our 500 m graph -->
+    <param name="propagationmodel"       value="precomputed"/>
+    <!-- receiver sensitivity = -174 + 4 + 10*log10(1e6) = -110 dBm -->
+    <param name="systemnoisefigure"      value="4.0"/>
+    <!-- subid must be the same on every TDMA NEM, or they cannot hear each other -->
+    <param name="subid"                  value="7"/>
+    <param name="fading.model"           value="none"/>
+  </phy>
+</nem>

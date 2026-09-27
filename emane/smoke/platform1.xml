@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE platform SYSTEM "file:///usr/share/emane/dtd/platform.dtd">
+<!-- Division 5 smoke test, radio 1 of 2 (hand-written so every line can be read once).
+     CONCEPT: EMANE architecture - one "emane" process = one platform = ONE NEM (one radio).
+     A NEM is transport (the emane0 TUN device) + MAC (the TDMA radio model) + PHY; see tdmanem.xml. -->
+<platform>
+  <!-- CONCEPT: OTA channel - emulated over-the-air frames travel between emane processes on this multicast group -->
+  <param name="otamanagerchannelenable" value="on"/>
+  <param name="otamanagerdevice" value="backchan0"/>
+  <param name="otamanagergroup" value="224.1.2.8:45702"/>
+  <!-- CONCEPT: event channel - pathloss and TDMA-schedule events arrive on this multicast group -->
+  <param name="eventservicegroup" value="224.1.2.8:45703"/>
+  <param name="eventservicedevice" value="backchan0"/>
+  <!-- control port: emanesh reads configuration, statistics and tables here (TCP 47000 on the radio's backchan0 IP) -->
+  <param name="controlportendpoint" value="0.0.0.0:47000"/>
+  <nem definition="tdmanem.xml" id="1">
+    <!-- CONCEPT: TUN device emane0 - the virtual transport creates it; ping and iperf3 use it like a real NIC -->
+    <transport definition="transvirtual.xml">
+      <param name="device" value="emane0"/>
+      <param name="address" value="10.100.0.1"/>
+      <param name="mask" value="255.255.255.0"/>
+    </transport>
+  </nem>
+</platform>
