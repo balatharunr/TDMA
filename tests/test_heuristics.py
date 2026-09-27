@@ -458,6 +458,17 @@ def test_iterated_greedy_is_deterministic_for_a_seed_and_the_seed_matters():
     assert same_a == same_b and same_a != other
 
 
+def test_iterated_greedy_only_replaces_the_start_on_a_strict_improvement():
+    # One edge a-b and two isolated radios: {a, c} / {b, d} is already optimal (2 slots). Reordering the
+    # classes produces OTHER 2-slot colourings, but none is better, so the start must come back unchanged.
+    graph = nx.Graph([("a", "b")])
+    graph.add_nodes_from(["c", "d"])
+    start = {"a": 0, "b": 1, "c": 0, "d": 1}
+    variants = {tuple(sorted(c.items())) for c in iterated_greedy_passes(graph, start, iterations=50, seed=1)}
+    assert len(variants) > 1  # the passes really do wander between different equal-slot colourings ...
+    assert iterated_greedy(graph, start, iterations=50, seed=1) == start  # ... and none of them replaces the start
+
+
 def test_iterated_greedy_with_no_iterations_returns_a_copy_of_the_start():
     _, H = build_graphs("hidden_terminal3")
     start = dsatur(H)
@@ -465,11 +476,62 @@ def test_iterated_greedy_with_no_iterations_returns_a_copy_of_the_start():
     assert result == start and result is not start
 
 
+# A complete multipartite graph keeps its colour classes (the parts) intact from pass to pass, so the order
+# of every iterated-greedy pass can be predicted. Parts: P0={n1}  P1={n2,n3,n4}  P2={n5,n6}  P3={n7,n8}.
+PARTS_GRAPH = nx.relabel_nodes(nx.complete_multipartite_graph(1, 3, 2, 2), {i: f"n{i + 1}" for i in range(8)})
+PARTS_START = {"n1": 0, "n2": 1, "n3": 1, "n4": 1, "n5": 2, "n6": 2, "n7": 3, "n8": 3}
+LARGEST_FIRST_ORDER = ["n2", "n3", "n4", "n5", "n6", "n7", "n8", "n1"]  # classes by size, largest first, ties: lower slot first
+REVERSED_ORDER = ["n7", "n8", "n5", "n6", "n2", "n3", "n4", "n1"]  # the classes in reverse slot order
+
+
+def scripted_random(answers, shuffled):
+    """A stand-in for `random` inside heuristics: Random().random() answers the scripted values in turn and
+    shuffle() records the list it was given and reverses it in place (a fixed, predictable shuffle)."""
+
+    class ScriptedRandom:
+        def __init__(self, seed):
+            self.answers = iter(answers)
+
+        def random(self):
+            return next(self.answers)
+
+        def shuffle(self, items):
+            shuffled.append(list(items))
+            items.reverse()
+
+    return types.SimpleNamespace(Random=ScriptedRandom)
+
+
+@pytest.mark.parametrize(
+    "r, branch",
+    [(0.0, "largest first"), (0.49, "largest first"), (0.5, "reverse"), (0.79, "reverse"), (0.8, "shuffle"), (0.99, "shuffle")],
+)
+def test_iterated_greedy_picks_its_reordering_at_the_spec_thresholds(monkeypatch, r, branch):
+    seen_orders, shuffled = [], []
+    real_greedy = heuristics.greedy_first_fit
+    monkeypatch.setattr(heuristics, "greedy_first_fit", lambda H, order: (seen_orders.append(list(order)), real_greedy(H, order))[1])
+    monkeypatch.setattr(heuristics, "random", scripted_random([r], shuffled))
+    list(iterated_greedy_passes(PARTS_GRAPH, PARTS_START, iterations=1, seed=0))
+    if branch == "largest first":  # r < 0.5
+        assert seen_orders == [LARGEST_FIRST_ORDER] and not shuffled
+    elif branch == "reverse":  # 0.5 <= r < 0.8
+        assert seen_orders == [REVERSED_ORDER] and not shuffled
+    else:  # r >= 0.8: shuffled (here: reversed by the scripted shuffle), and the classes were handed over in slot order
+        assert shuffled == [[["n1"], ["n2", "n3", "n4"], ["n5", "n6"], ["n7", "n8"]]] and seen_orders == [REVERSED_ORDER]
+
+
+def test_iterated_greedy_complains_if_a_pass_ever_needs_more_slots(monkeypatch):
+    # Culberson's theorem says this cannot happen; if it ever did, the code must say so instead of returning a worse frame
+    _, H = build_graphs("grid16_300m")
+    start = dsatur(H)  # 9 slots
+    wasteful = {v: i for i, v in enumerate(natural_order(H))}  # 16 slots
+    monkeypatch.setattr(heuristics, "greedy_first_fit", lambda H_, order: dict(wasteful))
+    with pytest.raises(RuntimeError, match="Culberson"):
+        list(iterated_greedy_passes(H, start, iterations=1, seed=1))
+
+
 def test_iterated_greedy_reorders_whole_classes_the_way_the_spec_says(monkeypatch):
-    # A complete multipartite graph keeps its colour classes (the parts) intact from pass to pass, so
-    # the order of every pass can be predicted. Parts: P0={n1}  P1={n2,n3,n4}  P2={n5,n6}  P3={n7,n8}.
-    graph = nx.relabel_nodes(nx.complete_multipartite_graph(1, 3, 2, 2), {i: f"n{i + 1}" for i in range(8)})
-    start = {"n1": 0, "n2": 1, "n3": 1, "n4": 1, "n5": 2, "n6": 2, "n7": 3, "n8": 3}
+    graph, start = PARTS_GRAPH, PARTS_START
     assert is_proper(graph, start)
     seen_orders, shuffled = [], []
     real_greedy = heuristics.greedy_first_fit
@@ -478,21 +540,8 @@ def test_iterated_greedy_reorders_whole_classes_the_way_the_spec_says(monkeypatc
         seen_orders.append(list(order))
         return real_greedy(H, order)
 
-    class ScriptedRandom:
-        """random() answers 0.1, 0.6, 0.9 in turn: the 'largest first', 'reverse' and 'shuffle' branches."""
-
-        def __init__(self, seed):
-            self.answers = iter([0.1, 0.6, 0.9])
-
-        def random(self):
-            return next(self.answers)
-
-        def shuffle(self, items):
-            shuffled.append(list(items))
-            items.reverse()  # a fixed, predictable "shuffle"
-
     monkeypatch.setattr(heuristics, "greedy_first_fit", spy)
-    monkeypatch.setattr(heuristics, "random", types.SimpleNamespace(Random=ScriptedRandom))
+    monkeypatch.setattr(heuristics, "random", scripted_random([0.1, 0.6, 0.9], shuffled))  # largest first, reverse, shuffle
     passes = list(iterated_greedy_passes(graph, start, iterations=3, seed=0))
 
     # pass 1, r = 0.1: largest class first; the equal-sized P2 and P3 keep the lower slot number first

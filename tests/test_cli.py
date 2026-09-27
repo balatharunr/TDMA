@@ -253,6 +253,23 @@ def test_the_seed_can_be_given_and_gives_a_reproducible_valid_schedule(capsys):
     assert first == second and first[0] == 0 and "PROVEN OPTIMAL" in first[1]
 
 
+def test_the_time_limit_and_the_seed_reach_the_optimizer(capsys, monkeypatch):
+    from tdma_brain import cli
+
+    real, seen = cli.optimize, {}
+
+    def spy(G, H, time_limit, seed):
+        seen.update(time_limit=time_limit, seed=seed)
+        return real(G, H, time_limit=time_limit, seed=seed)
+
+    monkeypatch.setattr(cli, "optimize", spy)
+    assert run_main(capsys, "--file", GRID, "--time-limit", "3.5", "--seed", "99")[0] == 0
+    assert seen == {"time_limit": 3.5, "seed": 99}
+    seen.clear()
+    run_main(capsys, "--file", GRID)  # and the documented defaults when nothing is given
+    assert seen == {"time_limit": 10.0, "seed": 42}
+
+
 @pytest.mark.parametrize("argv", [["--seed", "abc"], ["--seed", "1.5"], ["--time-limit", "soon"]])
 def test_a_seed_or_time_limit_that_is_not_a_number_is_a_usage_error(capsys, argv):
     with pytest.raises(SystemExit) as info:

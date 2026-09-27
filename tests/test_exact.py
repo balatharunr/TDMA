@@ -221,7 +221,7 @@ def test_symmetry_breaking_makes_a_clique_refutable_at_once():
     # K14 cannot use 13 slots. Without "open at most one brand-new slot per step" the search
     # would try 13! = 6.2 billion namings of the same partial colourings.
     started = time.perf_counter()
-    assert colourable(nx.complete_graph(14), 13, time.perf_counter() + 30) is None
+    assert colourable(nx.complete_graph(14), 13, time.perf_counter() + 5) is None  # a search that gets stuck raises SearchTimeout
     assert time.perf_counter() - started < 1
 
 

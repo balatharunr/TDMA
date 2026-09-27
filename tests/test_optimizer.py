@@ -141,6 +141,18 @@ def test_the_result_does_not_depend_on_anything_but_the_input_and_the_seed():
     assert other_seed.verification.ok and other_seed.schedule.frame_length == first.schedule.frame_length
 
 
+def test_the_seed_and_the_iteration_count_reach_the_iterated_greedy(monkeypatch):
+    G, H = build_graphs("grid16_400m")
+    seen = []
+    real = optimizer.iterated_greedy
+    monkeypatch.setattr(
+        optimizer, "iterated_greedy",
+        lambda H_, start, iterations, seed: (seen.append((iterations, seed)), real(H_, start, iterations, seed))[1],
+    )
+    optimize(G, H, seed=123)
+    assert seen == [(300, 123)]
+
+
 def test_a_bound_above_the_schedule_is_reported_as_a_bug(monkeypatch):
     G, H = build_graphs("grid16_300m")
     real = optimizer.lower_bound
