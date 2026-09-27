@@ -2,14 +2,19 @@
 
 A Schedule says in which slot(s) of the repeating frame each radio transmits. This module
 turns a raw colouring into a canonical schedule, computes its metrics, and reads and writes
-the schedule.json contract that Part 2 (EMANE) consumes.
+the schedule.json contract that Part 2 (EMANE) consumes, plus (Division 4) a CSV export of
+the Boolean matrix.
 """
+import csv
+import io
 import json
 from dataclasses import dataclass, field
 
 from . import __version__
 from .io_utils import InputError, natural_key
 
+# CONCEPT: Data contract (schedule.json) - frozen at Division 4: Part 2 (EMANE) is built against
+# these exact field names, so nothing here changes without updating the bridge that reads it too
 SCHEMA = "tdma-schedule/v1"
 
 
@@ -131,6 +136,22 @@ def to_json(schedule, G, *, verified, lower_bound=None, optimality=None):
         "verified": bool(verified),
     }
     return _dumps(data)
+
+
+def to_csv(schedule):
+    """Render the Boolean matrix as CSV text: a header row of node names, one data row per slot.
+
+    The first column is "Slot NN" (a row label, not one of the brief's nodes); every other
+    header cell is a node name, so the documented "header row of node names" is a prefix of
+    the actual header. A node name with a comma or quote is quoted per RFC 4180, so arbitrary
+    (validated) node names round-trip through spreadsheet software correctly.
+    """
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(["Slot", *schedule.nodes])
+    for slot, row in enumerate(schedule.matrix):
+        writer.writerow([f"Slot {slot:02d}", *row])
+    return buffer.getvalue()
 
 
 def _links(G):

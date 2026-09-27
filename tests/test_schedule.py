@@ -1,4 +1,9 @@
-"""Division 2 tests: the Schedule model, canonical numbering and the schedule.json contract."""
+"""Division 2 tests: the Schedule model, canonical numbering and the schedule.json contract.
+
+Division 4 adds the tests for to_csv() (the Boolean matrix as CSV) near the end of this file.
+"""
+import csv
+import io
 import json
 import random
 
@@ -7,7 +12,7 @@ import pytest
 from tdma_brain import __version__
 from tdma_brain.heuristics import dsatur
 from tdma_brain.io_utils import InputError, natural_key
-from tdma_brain.schedule import SCHEMA, Schedule, canonicalize, make_schedule, to_json
+from tdma_brain.schedule import SCHEMA, Schedule, canonicalize, make_schedule, to_csv, to_json
 from tdma_brain.topology import build_radio_graph
 from tests.golden import GOLDEN
 from tests.helpers import build_graphs, load_example
@@ -166,6 +171,55 @@ def test_json_is_ascii_even_for_non_ascii_node_names():
     text = to_json(schedule, G, verified=True)
     text.encode("ascii")
     assert Schedule.from_json(text) == schedule
+
+
+# --------------------------------------------------------------------------- Division 4: to_csv
+def test_csv_header_is_slot_then_every_node_name_in_order():
+    _, schedule = dsatur_schedule("grid16_300m")
+    header = to_csv(schedule).splitlines()[0]
+    assert header == "Slot," + ",".join(f"Node_{i:02d}" for i in range(1, 17))
+
+
+def test_csv_rows_match_the_matrix_exactly():
+    _, schedule = dsatur_schedule("grid16_300m")
+    lines = to_csv(schedule).splitlines()
+    assert len(lines) == 1 + schedule.frame_length  # header + one row per slot
+    for slot, row in enumerate(schedule.matrix):
+        assert lines[1 + slot] == f"Slot {slot:02d}," + ",".join(str(cell) for cell in row)
+    assert lines[1] == "Slot 00,1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1"  # slot 0: the four corners of the official grid
+
+
+@pytest.mark.parametrize("golden", GOLDEN, ids=lambda g: g.name)
+def test_csv_has_one_row_per_slot_for_every_example(golden):
+    _, schedule = dsatur_schedule(golden.name)
+    rows = list(csv.reader(io.StringIO(to_csv(schedule))))
+    assert len(rows) == 1 + schedule.frame_length
+    assert rows[0] == ["Slot", *schedule.nodes]
+    for slot, row in enumerate(rows[1:]):
+        assert row[0] == f"Slot {slot:02d}"
+        assert [int(cell) for cell in row[1:]] == schedule.matrix[slot]
+
+
+def test_csv_uses_lf_line_endings_and_ends_with_one():
+    _, schedule = dsatur_schedule("hidden_terminal3")
+    text = to_csv(schedule)
+    assert "\r" not in text and text.endswith("\n") and not text.endswith("\n\n")
+
+
+def test_csv_quotes_a_node_name_that_contains_a_comma():
+    # the input validator allows any node name; a name with a comma must not corrupt the CSV columns
+    schedule = make_schedule({"Node,1": 0, "Node_2": 1}, ["Node,1", "Node_2"], "test")
+    rows = list(csv.reader(io.StringIO(to_csv(schedule))))
+    assert rows[0] == ["Slot", "Node,1", "Node_2"]  # the comma survived as data, not a new column
+    assert len(rows[0]) == 3
+
+
+def test_csv_round_trips_into_the_same_matrix():
+    _, schedule = dsatur_schedule("grid16_400m")
+    rows = list(csv.reader(io.StringIO(to_csv(schedule))))
+    assert rows[0][1:] == schedule.nodes
+    matrix = [[int(cell) for cell in row[1:]] for row in rows[1:]]
+    assert matrix == schedule.matrix
 
 
 @pytest.mark.parametrize(

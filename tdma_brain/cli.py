@@ -1,4 +1,4 @@
-"""Command-line interface for the TDMA planner (Division 1, extended in Divisions 2 and 3).
+"""Command-line interface for the TDMA planner (Division 1, extended in Divisions 2, 3 and 4).
 
 The CLI layer only does I/O: it parses the arguments, calls the pure functions of the other
 modules, prints, and turns InputError into a one-line message and exit code 2.
@@ -13,7 +13,7 @@ from .heuristics import ALGORITHM_KEYS, run_algorithm
 from .io_utils import InputError, load_input
 from .optimizer import optimize
 from .report import format_report, format_verbose
-from .schedule import make_schedule, to_json
+from .schedule import make_schedule, to_csv, to_json
 from .topology import (
     DEFAULT_RADIO_RANGE_M,
     build_conflict_graph,
@@ -23,6 +23,7 @@ from .topology import (
     validate_radio_range,
 )
 from .verify import verify_schedule
+from .viz import plot_timeline, plot_topology
 
 EXIT_OK = 0
 EXIT_VERIFICATION_FAILED = 1
@@ -36,6 +37,7 @@ examples:
   python tdma_schedule.py --file examples/ring16_r1150m.json --verbose             # the proof, step by step
   python tdma_schedule.py --file examples/grid16_300m.json --algorithm naive-d1    # why distance-2 matters
   python tdma_schedule.py --file examples/grid16_300m.json --export-json results/grid16_300m.schedule.json
+  python tdma_schedule.py --file examples/grid16_300m.json --plot results/topology.png --timeline results/timeline.png --highlight Node_06 --export-csv results/matrix.csv
 
 exit codes: 0 = schedule verified conflict-free, 1 = verification failed, 2 = bad input or usage
 
@@ -108,6 +110,14 @@ def build_parser():
         action="store_true",
         help="print the topology summary (links, conflict pairs, hidden-terminal pairs) before the report",
     )
+    parser.add_argument("--plot", metavar="PATH", help="save a picture of the topology, coloured by slot, to PATH (.png)")
+    parser.add_argument("--timeline", metavar="PATH", help="save a slot x radio frame-timeline picture to PATH (.png)")
+    parser.add_argument(
+        "--highlight",
+        metavar="NODE",
+        help="with --plot: draw NODE's radio-range circle and ring its 1-hop and 2-hop neighbours",
+    )
+    parser.add_argument("--export-csv", metavar="PATH", help="also write the Slot x Node Boolean matrix as CSV to PATH")
     return parser
 
 
@@ -124,6 +134,8 @@ def main(argv=None):
     try:
         validate_radio_range(args.radio_range)  # fail fast: no "continuing anyway" warning before an error
         validate_time_limit(args.time_limit)
+        if args.highlight and not args.plot:
+            raise InputError("--highlight only makes sense together with --plot")
         coords = load_input(args)
         G = build_radio_graph(coords, args.radio_range)
         H = build_conflict_graph(G)
@@ -151,12 +163,26 @@ def main(argv=None):
 
     if args.export_json:
         proof = {"lower_bound": optimization.lower_bound.value, "optimality": optimization.status} if optimization else {}
-        try:
-            _write_text_file(args.export_json, to_json(schedule, G, verified=verification.ok, **proof))
-        except OSError as exc:
-            print(f"Error: cannot write {args.export_json}: {exc}", file=sys.stderr)
+        writer = lambda path: _write_text_file(path, to_json(schedule, G, verified=verification.ok, **proof))  # noqa: E731
+        if not _write_export(args.export_json, writer, "Schedule exported"):
             return EXIT_BAD_INPUT
-        print(f"Schedule exported to {args.export_json}", file=sys.stderr)
+    if args.export_csv:
+        writer = lambda path: _write_text_file(path, to_csv(schedule))  # noqa: E731
+        if not _write_export(args.export_csv, writer, "Matrix CSV exported"):
+            return EXIT_BAD_INPUT
+    if args.plot:
+        bound = optimization.lower_bound.value if optimization else None
+        status = optimization.status if optimization else None
+        writer = lambda path: plot_topology(G, schedule, path, args.highlight, bound, status)  # noqa: E731
+        try:
+            if not _write_export(args.plot, writer, "Topology plot saved"):
+                return EXIT_BAD_INPUT
+        except InputError as exc:  # an unknown --highlight node
+            print(f"Error: {exc}", file=sys.stderr)
+            return EXIT_BAD_INPUT
+    if args.timeline:
+        if not _write_export(args.timeline, lambda path: plot_timeline(schedule, path), "Frame-timeline plot saved"):  # noqa: E731
+            return EXIT_BAD_INPUT
 
     # CONCEPT: CLI design (argparse, exit codes) - 0 = verified schedule, 1 = verification failed, 2 = bad input: a script or grader can rely on the code without reading the text
     return EXIT_OK if verification.ok else EXIT_VERIFICATION_FAILED
@@ -167,6 +193,21 @@ def _write_text_file(path, text):
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8", newline="\n")
+
+
+def _write_export(path, writer, label):
+    """Run writer(path) (which may raise OSError), print one confirmation line, return success.
+
+    `writer` does the actual writing (text file or PNG); this only turns a failure into the
+    same clean "Error: ..." message and exit code every other input problem gets.
+    """
+    try:
+        writer(path)
+    except OSError as exc:
+        print(f"Error: cannot write {path}: {exc}", file=sys.stderr)
+        return False
+    print(f"{label} to {path}", file=sys.stderr)
+    return True
 
 
 def _make_output_ascii_safe():

@@ -364,9 +364,90 @@ def test_help_lists_the_options(capsys):
     out = capsys.readouterr().out
     for option in ("COORDS_JSON", "--file", "--range", "--algorithm", "auto", "dsatur", "rlf", "smallest_last",
                    "largest_first", "greedy", "naive-d1", "--time-limit", "--seed", "--verbose", "--export-json",
-                   "--show-topology"):
+                   "--show-topology", "--plot", "--timeline", "--highlight", "--export-csv"):
         assert option in out
     assert "exit codes" in out
+
+
+# --------------------------------------------------------------------------- Division 4: --plot, --timeline, --highlight, --export-csv
+def test_plot_and_timeline_save_non_empty_pngs(capsys, tmp_path):
+    plot_path, timeline_path = tmp_path / "topology.png", tmp_path / "timeline.png"
+    code, out, err = run_main(capsys, "--file", GRID, "--plot", str(plot_path), "--timeline", str(timeline_path))
+    assert code == 0 and out == OFFICIAL_REPORT + "\n"  # the plots leave the report untouched
+    assert f"Topology plot saved to {plot_path}\n" in err and f"Frame-timeline plot saved to {timeline_path}\n" in err
+    assert plot_path.stat().st_size > 0 and timeline_path.stat().st_size > 0
+
+
+def test_highlight_changes_the_plot_and_needs_no_extra_wait(capsys, tmp_path):
+    plain, highlighted = tmp_path / "plain.png", tmp_path / "highlighted.png"
+    run_main(capsys, "--file", GRID, "--plot", str(plain))
+    run_main(capsys, "--file", GRID, "--plot", str(highlighted), "--highlight", "Node_06")
+    assert plain.read_bytes() != highlighted.read_bytes()  # the highlight rings really changed the picture
+
+
+def test_highlight_without_plot_is_a_clean_error(capsys):
+    code, out, err = run_main(capsys, "--file", GRID, "--highlight", "Node_06")
+    assert code == 2 and out == ""
+    assert err == "Error: --highlight only makes sense together with --plot\n"
+
+
+def test_highlight_of_an_unknown_node_is_a_clean_error_and_writes_nothing(capsys, tmp_path):
+    target = tmp_path / "x.png"
+    code, out, err = run_main(capsys, "--file", GRID, "--plot", str(target), "--highlight", "Node_99")
+    assert code == 2 and out == OFFICIAL_REPORT + "\n"  # the report already printed before the plot failed
+    assert err.startswith("Error: --highlight") and "Node_99" in err
+    assert not target.exists()
+
+
+def test_plot_and_timeline_work_with_a_single_heuristic_too(capsys, tmp_path):
+    target = tmp_path / "topology.png"
+    code, _, err = run_main(capsys, "--file", GRID, "--algorithm", "dsatur", "--plot", str(target))
+    assert code == 0 and "Topology plot saved" in err
+    assert target.stat().st_size > 0  # no lower bound / status available, and that must not crash the plot
+
+
+def test_export_csv_writes_the_documented_columns(capsys, tmp_path):
+    target = tmp_path / "matrix.csv"
+    code, out, err = run_main(capsys, "--file", GRID, "--export-csv", str(target))
+    assert code == 0 and out == OFFICIAL_REPORT + "\n"
+    assert f"Matrix CSV exported to {target}\n" in err
+    import csv as csv_module
+
+    rows = list(csv_module.reader(target.open(encoding="utf-8", newline="")))
+    assert rows[0] == ["Slot", *[f"Node_{i:02d}" for i in range(1, 17)]]  # the documented header row of node names
+    assert len(rows) == 1 + 9  # header + 9 slots
+    assert target.read_bytes().count(b"\r") == 0
+
+
+def test_export_csv_is_written_even_when_verification_fails(capsys, tmp_path):
+    target = tmp_path / "naive.csv"
+    code, _, _ = run_main(capsys, "--file", GRID, "--algorithm", "naive-d1", "--export-csv", str(target))
+    assert code == 1 and target.stat().st_size > 0
+
+
+@pytest.mark.parametrize("option", ["--plot", "--timeline", "--export-csv"])
+def test_export_to_an_unwritable_path_is_a_clean_error(capsys, tmp_path, option):
+    (tmp_path / "afile").write_text("x", encoding="utf-8")
+    target = tmp_path / "afile" / "out"
+    code, _, err = run_main(capsys, "--file", GRID, option, str(target))
+    assert code == 2 and err.startswith("Error: cannot write ") and "Traceback" not in err
+
+
+def test_the_guides_combined_export_command(capsys, tmp_path):
+    # the exact command from Division 4's test list, all five outputs together
+    topo, timeline, schedule_json, matrix_csv = (
+        tmp_path / "grid16_300m_topology.png", tmp_path / "grid16_300m_timeline.png",
+        tmp_path / "grid16_300m.schedule.json", tmp_path / "grid16_300m.matrix.csv",
+    )
+    code, out, err = run_main(
+        capsys, "--file", GRID, "--plot", str(topo), "--timeline", str(timeline), "--highlight", "Node_06",
+        "--export-json", str(schedule_json), "--export-csv", str(matrix_csv),
+    )
+    assert code == 0 and out == OFFICIAL_REPORT + "\n"
+    for path in (topo, timeline, schedule_json, matrix_csv):
+        assert path.stat().st_size > 0
+    data = json.loads(schedule_json.read_text(encoding="utf-8"))
+    assert data["verified"] is True and data["frame_length"] == 9 and data["lower_bound"] == 9
 
 
 # --------------------------------------------------------------------------- real processes
@@ -442,6 +523,20 @@ def test_the_guides_verbose_commands_as_real_processes(name, key_lines):
     lines = without_timings(result.stdout).split("\n")
     for line in key_lines:
         assert line in lines, line
+
+
+def test_the_guides_combined_export_command_as_a_real_process(tmp_path):
+    result = run_script(
+        "--file", "examples/grid16_300m.json",
+        "--plot", str(tmp_path / "grid16_300m_topology.png"),
+        "--timeline", str(tmp_path / "grid16_300m_timeline.png"),
+        "--highlight", "Node_06",
+        "--export-json", str(tmp_path / "grid16_300m.schedule.json"),
+        "--export-csv", str(tmp_path / "grid16_300m.matrix.csv"),
+    )
+    assert result.returncode == 0 and result.stdout == OFFICIAL_REPORT + "\n"
+    for name in ("grid16_300m_topology.png", "grid16_300m_timeline.png", "grid16_300m.schedule.json", "grid16_300m.matrix.csv"):
+        assert (tmp_path / name).stat().st_size > 0
 
 
 def test_non_ascii_node_name_cannot_crash_an_ascii_only_console(tmp_path):
