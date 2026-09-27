@@ -40,6 +40,7 @@ def test_every_example_is_optimal_verified_and_proven(golden):
     # only the ring has a gap between the bound (3) and the optimum (4), and only there the search has to prove it
     assert result.status == (PROVEN_OPTIMAL_BY_SEARCH if golden.name == "ring16_r1150m" else PROVEN_OPTIMAL_BY_BOUND)
     assert result.exact_start == (4 if golden.name == "ring16_r1150m" else None)  # the search runs only if K > LB
+    assert result.total_ms < 1000  # the guide's bar for 16 nodes (in practice a few tens of milliseconds)
 
 
 def test_grid_400m_shows_why_a_portfolio_helps():
