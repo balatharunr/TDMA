@@ -16,7 +16,8 @@ $state = docker inspect -f '{{.State.Status}}' $name 2>$null
 if (-not $state) {
     # CONCEPT: Docker privileged container & bind mount - --privileged gives the container the kernel
     # capabilities for netns/bridge/TUN; -v mounts the Windows repo folder at /work inside Linux.
-    docker run -d --privileged --name $name -v "${root}:/work" -w /work tdma-emane sleep infinity | Out-Null
+    # --init makes a tiny init process PID 1 so the emane daemons we stop are reaped instead of lingering as zombies.
+    docker run -d --init --privileged --name $name -v "${root}:/work" -w /work tdma-emane sleep infinity | Out-Null
     Write-Host "created and started container $name (repo mounted at /work)"
 } elseif ($state -ne 'running') {
     docker start $name | Out-Null
