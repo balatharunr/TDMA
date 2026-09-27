@@ -245,16 +245,45 @@ Lower Bound (proof)     : 9 timeslots (max 2-hop clique = 9, maxdeg+1 = 9)
 Optimality              : PROVEN OPTIMAL (frame length = lower bound)
 -----------------------------------------------------------------
  NODE -> SLOT ASSIGNMENTS:
-  Node_01: Slot 0   Node_05: Slot 3   Node_09: Slot 6   Node_13: Slot 0
-  Node_02: Slot 1   Node_06: Slot 4   Node_10: Slot 7   Node_14: Slot 1
-  Node_03: Slot 2   Node_07: Slot 5   Node_11: Slot 8   Node_15: Slot 2
-  Node_04: Slot 0   Node_08: Slot 3   Node_12: Slot 6   Node_16: Slot 0
------------------------------------------------------------------
+  Node_01: Slot 0
+  Node_02: Slot 1
+  Node_03: Slot 2
+  Node_04: Slot 0
+  Node_05: Slot 3
+  Node_06: Slot 4
+  Node_07: Slot 5
+  Node_08: Slot 3
+  Node_09: Slot 6
+  Node_10: Slot 7
+  Node_11: Slot 8
+  Node_12: Slot 6
+  Node_13: Slot 0
+  Node_14: Slot 1
+  Node_15: Slot 2
+  Node_16: Slot 0
+
+ STRUCTURAL TDMA SCHEDULE MATRIX (Slot x Node Boolean Matrix):
+Slot \ Node | 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08 | 09 | 10 | 11 | 12 | 13 | 14 | 15 | 16
+-------------------------------------------------------------------------------------------
+ Slot 00    | 1  | 0  | 0  | 1  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 1  | 0  | 0  | 1
+ Slot 01    | 0  | 1  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 1  | 0  | 0
+ Slot 02    | 0  | 0  | 1  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 1  | 0
+ Slot 03    | 0  | 0  | 0  | 0  | 1  | 0  | 0  | 1  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0
+ Slot 04    | 0  | 0  | 0  | 0  | 0  | 1  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0
+ Slot 05    | 0  | 0  | 0  | 0  | 0  | 0  | 1  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0
+ Slot 06    | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 1  | 0  | 0  | 1  | 0  | 0  | 0  | 0
+ Slot 07    | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 1  | 0  | 0  | 0  | 0  | 0  | 0
+ Slot 08    | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 0  | 1  | 0  | 0  | 0  | 0  | 0
+-------------------------------------------------------------------------------------------
 Execution finalized cleanly. Schedule verified conflict-free.
 ================================================================
 ```
 
-**Frame length 9, instead of plain TDMA's 16 — a 43.75% reduction** (`1 − 9/16`) **— at a 1.78× spatial reuse factor.** This is not merely "the best schedule found": it is **proven optimal**. The 9 radios `{Node_06, Node_07, Node_08, Node_10, Node_11, Node_12, Node_14, Node_15, Node_16}` all mutually conflict (a clique of H), so no valid schedule for this topology can possibly use fewer than 9 slots — and this schedule reaches that floor exactly.
+The same output is produced whether the coordinates are passed as the brief's JSON string argument or with `--file examples/grid16_300m.json` (checked byte for byte), and the saved records `results/grid16_300m.schedule.json` and `results/grid16_300m.matrix.csv` are byte-identical to a fresh `--export-json` / `--export-csv` run.
+
+**Frame length 9, instead of plain TDMA's 16 — a 43.75% reduction** (`1 − 9/16`) **— at a 1.78× spatial reuse factor.** This is not merely "the best schedule found": it is **proven optimal**. The 9 radios `{Node_06, Node_07, Node_08, Node_10, Node_11, Node_12, Node_14, Node_15, Node_16}` all mutually conflict (a clique of H), so no valid schedule for this topology can possibly use fewer than 9 slots — and this schedule reaches that floor exactly. Spatial reuse is real and safe: the 10 pairs of radios that share a slot (for example `Node_01`, `Node_04`, `Node_13` and `Node_16`, the four corners, all in Slot 0) are each exactly 3 hops apart — more than 2, as the brief requires.
+
+**About the brief's sample output.** The brief illustrates the report format with a 5-slot schedule. Fed to this project's verifier on the same 300 m grid, that sample has **21 hidden-terminal collisions** (for example `Node_01` and `Node_03` share Slot 0, yet both reach `Node_02` and `Node_06`), and the grid's lower bound is 9, so no 5-slot schedule can exist for it. The sample is a format illustration, not an achievable target; the 9-slot result above is the true optimum.
 
 ### All 9 golden examples
 
