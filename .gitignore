@@ -6,3 +6,7 @@ __pycache__/
 # Scratch output that is not evidence (the rest of results/ is tracked)
 results/tmp/
 
+
+# EMANE runtime files written by the Part 2 scripts (logs, pidfiles); results/emane/ stays tracked
+emane/**/logs/
+emane/**/run/
