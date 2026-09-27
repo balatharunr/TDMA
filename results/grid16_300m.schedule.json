@@ -1,0 +1,27 @@
+{
+  "schema": "tdma-schedule/v1",
+  "generator": "tdma_brain 0.1.0",
+  "radio_range_m": 500.0,
+  "nodes": ["Node_01", "Node_02", "Node_03", "Node_04", "Node_05", "Node_06", "Node_07", "Node_08", "Node_09", "Node_10", "Node_11", "Node_12", "Node_13", "Node_14", "Node_15", "Node_16"],
+  "coordinates": {"Node_01": [0.0, 0.0], "Node_02": [300.0, 0.0], "Node_03": [600.0, 0.0], "Node_04": [900.0, 0.0], "Node_05": [0.0, 300.0], "Node_06": [300.0, 300.0], "Node_07": [600.0, 300.0], "Node_08": [900.0, 300.0], "Node_09": [0.0, 600.0], "Node_10": [300.0, 600.0], "Node_11": [600.0, 600.0], "Node_12": [900.0, 600.0], "Node_13": [0.0, 900.0], "Node_14": [300.0, 900.0], "Node_15": [600.0, 900.0], "Node_16": [900.0, 900.0]},
+  "links": [["Node_01", "Node_02"], ["Node_01", "Node_05"], ["Node_01", "Node_06"], ["Node_02", "Node_03"], ["Node_02", "Node_05"], ["Node_02", "Node_06"], ["Node_02", "Node_07"], ["Node_03", "Node_04"], ["Node_03", "Node_06"], ["Node_03", "Node_07"], ["Node_03", "Node_08"], ["Node_04", "Node_07"], ["Node_04", "Node_08"], ["Node_05", "Node_06"], ["Node_05", "Node_09"], ["Node_05", "Node_10"], ["Node_06", "Node_07"], ["Node_06", "Node_09"], ["Node_06", "Node_10"], ["Node_06", "Node_11"], ["Node_07", "Node_08"], ["Node_07", "Node_10"], ["Node_07", "Node_11"], ["Node_07", "Node_12"], ["Node_08", "Node_11"], ["Node_08", "Node_12"], ["Node_09", "Node_10"], ["Node_09", "Node_13"], ["Node_09", "Node_14"], ["Node_10", "Node_11"], ["Node_10", "Node_13"], ["Node_10", "Node_14"], ["Node_10", "Node_15"], ["Node_11", "Node_12"], ["Node_11", "Node_14"], ["Node_11", "Node_15"], ["Node_11", "Node_16"], ["Node_12", "Node_15"], ["Node_12", "Node_16"], ["Node_13", "Node_14"], ["Node_14", "Node_15"], ["Node_15", "Node_16"]],
+  "frame_length": 9,
+  "node_to_slot": {"Node_01": 0, "Node_02": 1, "Node_03": 2, "Node_04": 0, "Node_05": 3, "Node_06": 4, "Node_07": 5, "Node_08": 3, "Node_09": 6, "Node_10": 7, "Node_11": 8, "Node_12": 6, "Node_13": 0, "Node_14": 1, "Node_15": 2, "Node_16": 0},
+  "slot_to_nodes": [["Node_01", "Node_04", "Node_13", "Node_16"], ["Node_02", "Node_14"], ["Node_03", "Node_15"], ["Node_05", "Node_08"], ["Node_06"], ["Node_07"], ["Node_09", "Node_12"], ["Node_10"], ["Node_11"]],
+  "extra_tx_slots": {},
+  "matrix": [
+    [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+    [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+    [0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
+  ],
+  "lower_bound": null,
+  "optimality": null,
+  "algorithm": "DSATUR",
+  "verified": true
+}
