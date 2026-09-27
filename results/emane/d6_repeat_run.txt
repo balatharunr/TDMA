@@ -1,0 +1,15 @@
+== PID 1 ==
+    1 docker-init
+== cross-platform determinism: regenerate in the container and diff against the Windows-generated files ==
+Only in emane/scenario/grid16_300m: logs
+Only in emane/scenario/grid16_300m: run
+== repeat run: up / status / down, then check for leftover processes ==
+=== up: /work/emane/scenario/grid16_300m (16 radios)  2026-09-27T20:17:34Z  emane 1.5.3 ===
+  19 files valid
+[4/5] waiting for the 16 control ports
+  16/16 control ports answering, emane0 present on 16/16 radios (6 s since start)
+  16/16 radios hold exactly the planned pathloss table
+=== up: 16 radios running, no TDMA schedule loaded yet (9 s) ===
+16/16 radios healthy
+down: 16 daemon(s) stopped, backplane tdmabr0 and 16 namespaces removed
+emane processes left (running or zombie): 0; namespaces left: 0

@@ -1,0 +1,5 @@
+# first down
+down: 16 daemon(s) stopped, backplane tdmabr0 and 16 namespaces removed
+# second down (must be harmless)
+down: 0 daemon(s) stopped, backplane tdmabr0 and 16 namespaces removed
+# leftovers: netns=0 bridge=absent emane processes=3

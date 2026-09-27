@@ -1,0 +1,32 @@
+=== up: /work/emane/scenario/grid16_300m (16 radios)  2026-09-27T20:12:47Z  emane 1.5.3 ===
+[1/5] backplane
+  backplane up: tdmabr0 10.99.0.254/24, 16 namespaces node01..node16 (backchan0 = 10.99.0.1..16), FORWARD '-P FORWARD ACCEPT'
+[2/5] validating the XML against the installed DTDs (/usr/share/emane/dtd)
+  19 files valid
+[3/5] starting 16 emane daemons (one NEM each, inside their namespaces, real-time scheduling: 1)
+[4/5] waiting for the 16 control ports
+  16/16 control ports answering, emane0 present on 16/16 radios (6 s since start)
+[5/5] pathloss events: EMANE's connectivity := our 500 m graph (links.csv), then read back from every radio
+  pathloss matrix: 16 radios, 42 links -> 240 directed entries (84 at 80 dB, 156 at 200 dB)
+  matrix saved to /work/results/emane/pathloss_matrix.csv
+  published 16 pathloss events (one per receiver) on 224.1.2.8:45703 via tdmabr0
+  NEM  Node       entries  80 dB  200 dB  match
+    1  Node_01         15      3      12  OK
+    2  Node_02         15      5      10  OK
+    3  Node_03         15      5      10  OK
+    4  Node_04         15      3      12  OK
+    5  Node_05         15      5      10  OK
+    6  Node_06         15      8       7  OK
+    7  Node_07         15      8       7  OK
+    8  Node_08         15      5      10  OK
+    9  Node_09         15      5      10  OK
+   10  Node_10         15      8       7  OK
+   11  Node_11         15      8       7  OK
+   12  Node_12         15      5      10  OK
+   13  Node_13         15      3      12  OK
+   14  Node_14         15      5      10  OK
+   15  Node_15         15      5      10  OK
+   16  Node_16         15      3      12  OK
+  16/16 radios hold exactly the planned pathloss table
+  read-back report saved to /work/results/emane/d6_pathloss_readback.txt
+=== up: 16 radios running, no TDMA schedule loaded yet (10 s) ===

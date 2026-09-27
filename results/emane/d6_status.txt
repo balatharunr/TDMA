@@ -1,0 +1,17 @@
+Node_01  NEM  1  emane: running  control: OK   emane0: 10.100.0.1   schedule: none
+Node_02  NEM  2  emane: running  control: OK   emane0: 10.100.0.2   schedule: none
+Node_03  NEM  3  emane: running  control: OK   emane0: 10.100.0.3   schedule: none
+Node_04  NEM  4  emane: running  control: OK   emane0: 10.100.0.4   schedule: none
+Node_05  NEM  5  emane: running  control: OK   emane0: 10.100.0.5   schedule: none
+Node_06  NEM  6  emane: running  control: OK   emane0: 10.100.0.6   schedule: none
+Node_07  NEM  7  emane: running  control: OK   emane0: 10.100.0.7   schedule: none
+Node_08  NEM  8  emane: running  control: OK   emane0: 10.100.0.8   schedule: none
+Node_09  NEM  9  emane: running  control: OK   emane0: 10.100.0.9   schedule: none
+Node_10  NEM 10  emane: running  control: OK   emane0: 10.100.0.10  schedule: none
+Node_11  NEM 11  emane: running  control: OK   emane0: 10.100.0.11  schedule: none
+Node_12  NEM 12  emane: running  control: OK   emane0: 10.100.0.12  schedule: none
+Node_13  NEM 13  emane: running  control: OK   emane0: 10.100.0.13  schedule: none
+Node_14  NEM 14  emane: running  control: OK   emane0: 10.100.0.14  schedule: none
+Node_15  NEM 15  emane: running  control: OK   emane0: 10.100.0.15  schedule: none
+Node_16  NEM 16  emane: running  control: OK   emane0: 10.100.0.16  schedule: none
+16/16 radios healthy
