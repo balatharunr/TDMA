@@ -1,9 +1,25 @@
-"""Division 2 tests: the ASCII report (tdma_brain.report)."""
+"""Division 2-3 tests: the ASCII report and the --verbose block (tdma_brain.report)."""
+import dataclasses
+import re
+
 import pytest
 
-from tdma_brain.heuristics import DSATUR_NAME, dsatur, greedy_first_fit, naive_distance1
+from tdma_brain import optimizer
+from tdma_brain.bounds import LowerBound
+from tdma_brain.exact import BEST_FOUND, PROVEN_OPTIMAL_BY_BOUND, PROVEN_OPTIMAL_BY_SEARCH
+from tdma_brain.heuristics import DSATUR_NAME, dsatur, greedy_first_fit, naive_distance1, smallest_last
 from tdma_brain.io_utils import natural_key
-from tdma_brain.report import BAR, RULE, TITLE, column_labels, describe_algorithm, format_report
+from tdma_brain.optimizer import optimize
+from tdma_brain.report import (
+    BAR,
+    RULE,
+    TITLE,
+    column_labels,
+    describe_algorithm,
+    format_report,
+    format_verbose,
+    optimality_text,
+)
 from tdma_brain.schedule import make_schedule
 from tdma_brain.verify import VerificationResult, verify_schedule
 from tests.golden import GOLDEN, REPO_ROOT
@@ -201,3 +217,147 @@ def test_structural_problems_are_listed_too():
 
 def test_the_report_is_a_pure_function():
     assert report_for("ring16_r1150m")[0] == report_for("ring16_r1150m")[0]
+
+
+# --------------------------------------------------------------------------- Division 3: lower bound and optimality lines
+FIXTURE_AUTO = REPO_ROOT / "tests" / "fixtures" / "grid16_300m_report_auto.txt"  # the D2 fixture + the guide's two new lines
+
+
+def optimized(name, **kwargs):
+    """(report text with the two proof lines, the OptimizationResult) for examples/<name>.json."""
+    G, H = build_graphs(name)
+    result = optimize(G, H, **kwargs)
+    return format_report(result.schedule, result.verification, 500.0, result), result
+
+
+def test_official_auto_report_matches_the_guides_expected_lines_line_by_line():
+    report, _ = optimized("grid16_300m")
+    expected = FIXTURE_AUTO.read_text(encoding="utf-8").splitlines()
+    assert [line.rstrip() for line in report.splitlines()] == [line.rstrip() for line in expected]
+
+
+@pytest.mark.parametrize("golden", GOLDEN, ids=lambda g: g.name)
+def test_the_proof_lines_sit_after_the_reuse_factor_and_change_nothing_else(golden):
+    report, result = optimized(golden.name)
+    lines = report.split("\n")
+    assert lines[7].startswith("Spatial Reuse Factor    : ")
+    assert lines[8].startswith("Lower Bound (proof)     : ") and lines[9].startswith("Optimality              : ")
+    assert lines[10] == RULE
+    without = lines[:8] + lines[10:]  # drop the two new lines ...
+    plain = format_report(result.schedule, result.verification, 500.0)  # ... and it is exactly the Division 2 report
+    assert without == plain.split("\n")
+    assert all(line == line.rstrip() for line in lines)
+    report.encode("ascii")
+
+
+@pytest.mark.parametrize(
+    "name, lower_bound_line, optimality_line",
+    [
+        ("grid16_300m", "9 timeslots (max 2-hop clique = 9, maxdeg+1 = 9)", "PROVEN OPTIMAL (frame length = lower bound)"),
+        ("grid16_250m", "12 timeslots (max 2-hop clique = 12, maxdeg+1 = 11)", "PROVEN OPTIMAL (frame length = lower bound)"),
+        ("ring16_r1150m", "3 timeslots (max 2-hop clique = 3, maxdeg+1 = 3)", "PROVEN OPTIMAL (exact search: 3 slots impossible)"),
+        ("isolated16_1000m", "1 timeslots (max 2-hop clique = 1, maxdeg+1 = 1)", "PROVEN OPTIMAL (frame length = lower bound)"),
+        ("cluster16_30m", "16 timeslots (max 2-hop clique = 16, maxdeg+1 = 16)", "PROVEN OPTIMAL (frame length = lower bound)"),
+    ],
+)
+def test_lower_bound_and_optimality_lines(name, lower_bound_line, optimality_line):
+    lines = optimized(name)[0].split("\n")
+    assert f"Lower Bound (proof)     : {lower_bound_line}" in lines
+    assert f"Optimality              : {optimality_line}" in lines
+
+
+def test_best_found_shows_the_open_gap():
+    report, result = optimized("ring16_r1150m", time_limit=0)  # no time for the search: 4 slots vs a bound of 3
+    assert result.status == BEST_FOUND
+    assert "Optimality              : BEST FOUND (gap = 1, time limit reached)" in report.split("\n")
+    assert report.split("\n")[-2] == "Execution finalized cleanly. Schedule verified conflict-free."  # the schedule itself is fine
+
+
+def test_the_report_says_when_the_clique_search_was_skipped():
+    report, result = optimized("hidden_terminal3")
+    skipped = dataclasses.replace(result, lower_bound=LowerBound(3, 3, None, ()))
+    text = format_report(skipped.schedule, skipped.verification, 500.0, skipped)
+    assert "Lower Bound (proof)     : 3 timeslots (max 2-hop clique skipped: more than 300 nodes, maxdeg+1 = 3)" in text.split("\n")
+
+
+def test_optimality_text_for_every_status():
+    assert optimality_text(PROVEN_OPTIMAL_BY_BOUND, 9, 9) == "PROVEN OPTIMAL (frame length = lower bound)"
+    assert optimality_text(PROVEN_OPTIMAL_BY_SEARCH, 4, 3) == "PROVEN OPTIMAL (exact search: 3 slots impossible)"
+    assert optimality_text(BEST_FOUND, 7, 2) == "BEST FOUND (gap = 5, time limit reached)"
+    with pytest.raises(ValueError, match="unknown optimality status"):
+        optimality_text("MAYBE", 4, 3)
+
+
+# --------------------------------------------------------------------------- Division 3: the --verbose block
+def masked(text):
+    """The verbose block with the timings (which change from run to run) replaced by <ms>."""
+    return re.sub(r"(?m)^(  .+\S\s+\d+)\s+\d+\.\d$", r"\1   <ms>", text)
+
+
+def test_verbose_block_for_grid_400m_has_the_guides_layout():
+    _, result = optimized("grid16_400m")
+    text = format_verbose(result)
+    lines = masked(text).split("\n")
+    assert lines[:8] == [
+        "HEURISTIC PORTFOLIO (conflict graph: 16 nodes, 58 conflict pairs)",
+        "  Heuristic                        Slots   Time (ms)",
+        "  DSATUR                               5   <ms>",
+        "  RLF                                  5   <ms>",
+        "  smallest_last                        6   <ms>",
+        "  largest_first (Welsh-Powell)         6   <ms>",
+        "  greedy (natural order)               6   <ms>",
+        "  -> best: DSATUR ; iterated greedy (300 it): 5 (no change)",
+    ]
+    lower_bound = re.fullmatch(r"LOWER BOUND: maxdeg\+1 = 5, max clique = 5 \{(.+)\} -> LB = 5", lines[8])
+    assert lower_bound, lines[8]
+    clique = lower_bound.group(1).split(", ")  # any maximum clique is acceptable: check that it really is one
+    _, H = build_graphs("grid16_400m")
+    assert len(clique) == 5 and all(H.has_edge(u, v) for i, u in enumerate(clique) for v in clique[i + 1:])
+    assert lines[9] == "RESULT: 5 slots = lower bound -> PROVEN OPTIMAL (frame length = lower bound)"
+    assert len(lines) == 10
+
+
+def test_verbose_columns_line_up_and_the_block_is_plain_ascii():
+    for name in ("grid16_300m", "grid16_250m", "ring16_r1150m"):
+        _, result = optimized(name)
+        text = format_verbose(result)
+        text.encode("ascii")
+        lines = text.split("\n")
+        assert all(line == line.rstrip() for line in lines)
+        table = [line for line in lines if re.match(r"  (Heuristic|DSATUR|RLF|smallest_last|largest_first|greedy)", line)]
+        assert len(table) == 6  # the header and the five heuristics
+        assert len({len(line) for line in table}) == 1  # every line ends in the same column: right-aligned numbers
+        for line in table:  # a 2-space indent and a 33-wide name column: the Slots field is columns 35-39
+            assert line[35:40] == "Slots" or line[35:40].strip().isdigit(), line
+
+
+def test_verbose_shows_the_exact_search_proof_for_the_ring():
+    _, result = optimized("ring16_r1150m")
+    lines = format_verbose(result).split("\n")
+    assert lines[-2].startswith("LOWER BOUND: maxdeg+1 = 3, max clique = 3 {") and lines[-2].endswith("} -> LB = 3")
+    assert lines[-1] == "RESULT: 4 slots, lower bound 3 -> exact search: 3 slots impossible -> PROVEN OPTIMAL (exact search)"
+
+
+def test_verbose_shows_a_gap_that_stayed_open():
+    _, result = optimized("ring16_r1150m", time_limit=0)
+    assert format_verbose(result).split("\n")[-1] == "RESULT: 4 slots, lower bound 3 -> BEST FOUND (gap = 1, time limit reached)"
+
+
+def test_verbose_reports_what_iterated_greedy_and_the_exact_search_improved(monkeypatch):
+    G, H = build_graphs("grid16_400m")
+    wasteful = smallest_last(H)  # 6 slots
+    monkeypatch.setattr(optimizer, "run_algorithm", lambda key, G_, H_: (key.upper(), dict(wasteful)))
+    polished = format_verbose(optimize(G, H)).split("\n")
+    assert "  -> best: DSATUR ; iterated greedy (300 it): 5 (improved from 6)" in polished
+    rainbow = {v: i for i, v in enumerate(sorted(H.nodes, key=natural_key))}
+    monkeypatch.setattr(optimizer, "run_algorithm", lambda key, G_, H_: (key.upper(), dict(rainbow)))
+    monkeypatch.setattr(optimizer, "iterated_greedy", lambda H_, start, iterations, seed: dict(start))
+    searched = format_verbose(optimize(G, H)).split("\n")
+    assert "  -> exact search improved 16 to 5 slots" in searched
+    assert searched[-1] == "RESULT: 5 slots = lower bound -> PROVEN OPTIMAL (frame length = lower bound)"
+
+
+def test_verbose_says_when_the_clique_search_was_skipped():
+    _, result = optimized("hidden_terminal3")
+    skipped = dataclasses.replace(result, lower_bound=LowerBound(3, 3, None, ()))
+    assert "LOWER BOUND: maxdeg+1 = 3, max clique skipped (more than 300 nodes) -> LB = 3" in format_verbose(skipped).split("\n")
