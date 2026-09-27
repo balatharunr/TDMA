@@ -1,0 +1,88 @@
+=== D5 smoke test  2026-09-27T19:40:29Z  emane 1.5.3  kernel 6.6.87.2-microsoft-standard-WSL2  slot = 10000 us ===
+
+[1/8] wiring: bridge tdmabr0 (10.99.0.254/24) + 2 namespaces
+  node01: backchan0 10.99.0.1 <-> veth01 on tdmabr0
+  node02: backchan0 10.99.0.2 <-> veth02 on tdmabr0
+
+[2/8] starting 2 emane daemons (one NEM each)
+  node01: emane NEM 1 started (real-time priority)
+  node02: emane NEM 2 started (real-time priority)
+  node01: control port OK, emane0 = 10.100.0.1/24
+  node02: control port OK, emane0 = 10.100.0.2/24
+
+[3/8] pathloss 1<->2 = 80 dB (precomputed propagation: this event IS the topology)
+  published: | 2 | 80.0 | 80.0 |
+
+[4/8] ping BEFORE any schedule (expect 100% loss; the '+N errors' are 'Destination Host Unreachable': even ARP cannot get through)
+  [before schedule] 5 packets transmitted, 0 received, +3 errors, 100% packet loss, time 4085ms
+  scheduleAcceptFull = 0 (no schedule yet)
+
+[5/8] publish the 2-slot schedule: emaneevent-tdmaschedule -i tdmabr0 emane/smoke/run/schedule_10000us.xml
+  exit code: 0  (1 would mean the XML failed EMANE's XSD validation)
+
+[6/8] ping AFTER the schedule (expect ~0% loss)
+  [after schedule] 5 packets transmitted, 5 received, 0% packet loss, time 804ms
+  [after schedule] rtt min/avg/max/mdev = 49.775/51.664/53.808/1.429 ms
+
+[7/8] read back the schedule and the slot statistics from each radio (emanesh)
+  --- NEM 1 (10.99.0.1) ---
+  nem 1   mac scheduler.ScheduleInfoTable
+  | Index | Frame | Slot | Type | Frequency  | Data Rate | Power | Class | Destination |
+  | 0     | 0     | 0    | TX   | 2400000000 | 11000000  | 0.0   | 0     | 0           |
+  | 1     | 0     | 1    | RX   | 2400000000 |           |       |       |             |
+  
+  nem 1   mac scheduler.StructureInfoTable
+  | Name         | Value   |
+  | bandwidth    | 1000000 |
+  | frames       | 1       |
+  | slotduration | 10000   |
+  | slotoverhead | 100     |
+  | slots        | 2       |
+  
+  nem 1   mac  numRxSlotErrorMissed = 0
+  nem 1   mac  numRxSlotValid = 10
+  nem 1   mac  numTxSlotErrorMissed = 0
+  nem 1   mac  numTxSlotValid = 165
+  nem 1   mac  scheduler.scheduleAcceptFull = 1
+  nem 1   mac  scheduler.scheduleAcceptUpdate = 0
+  nem 1   mac RxSlotStatusTable
+  | Index | Frame | Slot | Valid | Missed | Idle | Tx | Long | Freq | Lock | .25 | .50 | .75 | 1.0 | 1.25 | 1.50 | 1.75 | >1.75 |
+  | 1     | 0     | 1    | 10    | 0      | 0    | 0  | 0    | 0    | 0    | 9   | 1   | 0   | 0   | 0    | 0    | 0    | 0     |
+  
+  nem 1   mac TxSlotStatusTable
+  | Index | Frame | Slot | Valid | Missed | Big | .25 | .50 | .75 | 1.0 | 1.25 | 1.50 | 1.75 | >1.75 |
+  | 0     | 0     | 0    | 173   | 0      | 0   | 173 | 0   | 0   | 0   | 0    | 0    | 0    | 0     |
+  
+  --- NEM 2 (10.99.0.2) ---
+  nem 2   mac scheduler.ScheduleInfoTable
+  | Index | Frame | Slot | Type | Frequency  | Data Rate | Power | Class | Destination |
+  | 0     | 0     | 0    | RX   | 2400000000 |           |       |       |             |
+  | 1     | 0     | 1    | TX   | 2400000000 | 11000000  | 0.0   | 0     | 0           |
+  
+  nem 2   mac scheduler.StructureInfoTable
+  | Name         | Value   |
+  | bandwidth    | 1000000 |
+  | frames       | 1       |
+  | slotduration | 10000   |
+  | slotoverhead | 100     |
+  | slots        | 2       |
+  
+  nem 2   mac  numRxSlotErrorMissed = 0
+  nem 2   mac  numRxSlotValid = 9
+  nem 2   mac  numTxSlotErrorMissed = 0
+  nem 2   mac  numTxSlotValid = 189
+  nem 2   mac  scheduler.scheduleAcceptFull = 1
+  nem 2   mac  scheduler.scheduleAcceptUpdate = 0
+  nem 2   mac RxSlotStatusTable
+  | Index | Frame | Slot | Valid | Missed | Idle | Tx | Long | Freq | Lock | .25 | .50 | .75 | 1.0 | 1.25 | 1.50 | 1.75 | >1.75 |
+  | 0     | 0     | 0    | 9     | 0      | 0    | 0  | 0    | 0    | 0    | 9   | 0   | 0   | 0   | 0    | 0    | 0    | 0     |
+  
+  nem 2   mac TxSlotStatusTable
+  | Index | Frame | Slot | Valid | Missed | Big | .25 | .50 | .75 | 1.0 | 1.25 | 1.50 | 1.75 | >1.75 |
+  | 1     | 0     | 1    | 197   | 0      | 0   | 197 | 0   | 0   | 0   | 0    | 0    | 0    | 0     |
+  
+  [readback] NEM 1: TX slot 0 | NEM 2: TX slot 1
+  [timing @ 10000 us] TX slots missed: NEM1 0/229, NEM2 0/244; receptions processed too late (dropped): NEM1 0 of 11, NEM2 0 of 10
+
+[8/8] teardown
+[8/8] done
