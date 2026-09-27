@@ -1,19 +1,29 @@
 """Division 2 tests: the colouring heuristics (tdma_brain.heuristics)."""
 import itertools
 import random
+import types
 
 import networkx as nx
 import pytest
 
+from tdma_brain import heuristics
 from tdma_brain.heuristics import (
     ALGORITHM_KEYS,
     DSATUR_NAME,
     GREEDY_NAME,
+    LARGEST_FIRST_NAME,
     NAIVE_D1_NAME,
+    RLF_NAME,
+    SMALLEST_LAST_NAME,
     dsatur,
     greedy_first_fit,
+    iterated_greedy,
+    iterated_greedy_passes,
+    largest_first,
     naive_distance1,
+    rlf,
     run_algorithm,
+    smallest_last,
 )
 from tdma_brain.io_utils import natural_key
 from tests.golden import GOLDEN
@@ -234,10 +244,263 @@ def test_run_algorithm_maps_each_key_to_its_heuristic():
     assert run_algorithm("dsatur", G, H) == (DSATUR_NAME, dsatur(H))
     assert run_algorithm("greedy", G, H) == (GREEDY_NAME, greedy_first_fit(H, natural_order(H)))
     assert run_algorithm("naive-d1", G, H) == (NAIVE_D1_NAME, naive_distance1(G))
-    assert set(ALGORITHM_KEYS) == {"dsatur", "greedy", "naive-d1"}
+    assert run_algorithm("rlf", G, H) == (RLF_NAME, rlf(H))
+    assert run_algorithm("smallest_last", G, H) == (SMALLEST_LAST_NAME, smallest_last(H))
+    assert run_algorithm("largest_first", G, H) == (LARGEST_FIRST_NAME, largest_first(H))
+    # the guide's CLI order: the portfolio heuristics first, the unsafe demo last
+    assert ALGORITHM_KEYS == ("dsatur", "rlf", "smallest_last", "largest_first", "greedy", "naive-d1")
 
 
 def test_run_algorithm_rejects_an_unknown_key():
     G, H = build_graphs("hidden_terminal3")
-    with pytest.raises(ValueError, match="unknown algorithm 'magic'"):
+    with pytest.raises(ValueError, match="unknown algorithm 'magic'") as info:
         run_algorithm("magic", G, H)
+    assert all(key in str(info.value) for key in ALGORITHM_KEYS)
+
+
+# --------------------------------------------------------------------------- Division 3: Welsh-Powell, smallest-last, RLF
+def largest_first_by_the_book(H):
+    """The guide's spec for Welsh-Powell: degree descending, ties in natural order, then first-fit."""
+    return greedy_first_fit(H, sorted(natural_order(H), key=lambda v: -H.degree(v)))  # a stable sort keeps natural order for ties
+
+
+def smallest_last_by_the_book(H):
+    """The guide's spec for smallest-last, recomputing the degrees among the remaining nodes every time."""
+    order = natural_order(H)
+    remaining, removal = list(order), []
+    while remaining:
+        degree = {v: sum(1 for u in H[v] if u in remaining) for v in remaining}
+        v = min(remaining, key=lambda x: (degree[x], order.index(x)))
+        removal.append(v)
+        remaining.remove(v)
+    return greedy_first_fit(H, list(reversed(removal)))
+
+
+def rlf_by_the_book(H):
+    """The guide's RLF spec transcribed literally: X = candidates, Y = blocked, recomputed from scratch."""
+    order = natural_order(H)
+    U, colour, slot = set(order), {}, 0
+    while U:
+        X, Y = set(U), set()
+        best = None
+        for x in order:  # first radio of the slot: the most neighbours inside U, ties in natural order
+            if x in X and (best is None or len(set(H[x]) & U) > best[0]):
+                best = (len(set(H[x]) & U), x)
+        v = best[1]
+        colour[v] = slot
+        Y |= set(H[v]) & X
+        X -= {v} | set(H[v])
+        while X:
+            best = None
+            for x in order:  # then: most neighbours in Y, fewest in X, ties in natural order
+                key = (len(set(H[x]) & Y), -len(set(H[x]) & X))
+                if x in X and (best is None or key > best[0]):
+                    best = (key, x)
+            v = best[1]
+            colour[v] = slot
+            Y |= set(H[v]) & X
+            X -= {v} | set(H[v])
+        U -= {n for n in colour if colour[n] == slot}
+        slot += 1
+    return colour
+
+
+NEW_HEURISTICS = [
+    ("largest_first", largest_first, largest_first_by_the_book),
+    ("smallest_last", smallest_last, smallest_last_by_the_book),
+    ("rlf", rlf, rlf_by_the_book),
+]
+
+
+@pytest.mark.parametrize("name, fast, by_the_book", NEW_HEURISTICS, ids=[n for n, _, _ in NEW_HEURISTICS])
+def test_new_heuristics_match_the_spec_transcribed_literally(name, fast, by_the_book):
+    for seed in range(300):
+        graph = random_graph(seed)
+        assert fast(graph) == by_the_book(graph), f"{name} seed {seed}"
+    for golden in GOLDEN:
+        _, H = build_graphs(golden.name)
+        assert fast(H) == by_the_book(H), f"{name} {golden.name}"
+
+
+@pytest.mark.parametrize("name, fast, by_the_book", NEW_HEURISTICS, ids=[n for n, _, _ in NEW_HEURISTICS])
+def test_new_heuristics_are_proper_and_within_max_degree_plus_one(name, fast, by_the_book):
+    for golden in GOLDEN:
+        _, H = build_graphs(golden.name)
+        colour = fast(H)
+        assert is_proper(H, colour) and slots_used(colour) <= max(d for _, d in H.degree()) + 1, golden.name
+    for seed in range(200):
+        graph = random_graph(seed)
+        colour = fast(graph)
+        assert is_proper(graph, colour), f"{name} seed {seed}"
+        assert slots_used(colour) <= max((d for _, d in graph.degree()), default=0) + 1, f"{name} seed {seed}"
+
+
+def test_smallest_last_never_needs_more_than_the_degeneracy_plus_one():
+    # the Matula-Beck guarantee: colouring in reverse peeling order needs at most (degeneracy + 1) slots
+    for seed in range(200):
+        graph = random_graph(seed)
+        degeneracy = max(nx.core_number(graph).values(), default=-1)
+        assert slots_used(smallest_last(graph)) <= degeneracy + 1, f"seed {seed}"
+
+
+def test_welsh_powell_stays_within_its_classical_bound():
+    # Welsh and Powell (1967): at most max over i of min(d_i + 1, i), with d_1 >= d_2 >= ... the degrees
+    for seed in range(200):
+        graph = random_graph(seed)
+        degrees = sorted((d for _, d in graph.degree()), reverse=True)
+        bound = max((min(d + 1, i) for i, d in enumerate(degrees, start=1)), default=0)
+        assert slots_used(largest_first(graph)) <= bound, f"seed {seed}"
+
+
+def test_rlf_builds_each_slot_as_a_maximal_independent_set_of_what_is_left():
+    for seed in range(100):
+        graph = random_graph(seed)
+        colour = rlf(graph)
+        classes = [{v for v in colour if colour[v] == s} for s in range(slots_used(colour))]
+        left = set(graph.nodes)
+        for members in classes:
+            assert not any(graph.has_edge(u, v) for u in members for v in members), f"seed {seed}"  # independent
+            assert all(any(graph.has_edge(v, m) for m in members) for v in left - members), f"seed {seed}"  # maximal
+            left -= members
+        assert not left
+
+
+def test_rlf_fills_the_first_slot_starting_from_the_most_conflicted_radio():
+    star = nx.star_graph(["Node_5", "Node_1", "Node_2", "Node_3"])  # Node_5 is linked to all the others
+    colour = rlf(star)
+    assert colour["Node_5"] == 0 and {colour[n] for n in ("Node_1", "Node_2", "Node_3")} == {1}
+
+
+@pytest.mark.parametrize("name, fast, by_the_book", NEW_HEURISTICS, ids=[n for n, _, _ in NEW_HEURISTICS])
+def test_new_heuristics_on_the_guides_known_graphs(name, fast, by_the_book):
+    for graph, chi in [(g, c) for g, c in KNOWN_CHI]:
+        colour = fast(graph)
+        assert is_proper(graph, colour) and slots_used(colour) >= chi  # never below the chromatic number
+
+
+@pytest.mark.parametrize("name, fast, by_the_book", NEW_HEURISTICS, ids=[n for n, _, _ in NEW_HEURISTICS])
+def test_new_heuristics_ignore_construction_order_and_accept_integer_nodes(name, fast, by_the_book):
+    _, H = build_graphs("grid16_400m")
+    expected = fast(H)
+    rng = random.Random(11)
+    for _ in range(5):
+        nodes, edges = list(H.nodes), list(H.edges)
+        rng.shuffle(nodes)
+        rng.shuffle(edges)
+        shuffled = nx.Graph()
+        shuffled.add_nodes_from(nodes)
+        shuffled.add_edges_from(edges)
+        assert fast(shuffled) == expected
+    assert is_proper(nx.mycielski_graph(4), fast(nx.mycielski_graph(4)))
+    assert fast(nx.Graph()) == {}
+
+
+def test_grid_400m_heuristic_quality_matches_the_guide():
+    # guide 5.1 / 5.3: DSATUR and RLF find the optimum of 5; natural-order greedy and Welsh-Powell need 6
+    _, H = build_graphs("grid16_400m")
+    assert slots_used(dsatur(H)) == 5 and slots_used(rlf(H)) == 5
+    assert slots_used(largest_first(H)) == 6
+    assert slots_used(greedy_first_fit(H, natural_order(H))) == 6
+    assert slots_used(smallest_last(H)) == 6  # the guide's verbose example
+
+
+# --------------------------------------------------------------------------- Division 3: iterated greedy
+def test_iterated_greedy_never_increases_the_slot_count_at_any_iteration():
+    for seed in range(50):
+        graph = random_graph(seed)
+        start = greedy_first_fit(graph, natural_order(graph))
+        previous = slots_used(start)
+        for colouring in iterated_greedy_passes(graph, start, iterations=100, seed=seed):
+            assert is_proper(graph, colouring), f"seed {seed}"
+            assert slots_used(colouring) <= previous, f"seed {seed}"
+            previous = slots_used(colouring)
+        assert slots_used(iterated_greedy(graph, start, iterations=100, seed=seed)) <= slots_used(start)
+
+
+def test_iterated_greedy_starts_from_any_proper_colouring_even_a_wasteful_one():
+    _, H = build_graphs("grid16_300m")
+    wasteful = {v: 10 * i for i, v in enumerate(natural_order(H))}  # 16 slots with gaps in the numbering
+    result = iterated_greedy(H, wasteful, iterations=50, seed=1)
+    assert is_proper(H, result) and slots_used(result) <= 16
+
+
+def test_iterated_greedy_repairs_a_wasteful_colouring():
+    _, H = build_graphs("grid16_400m")
+    assert slots_used(smallest_last(H)) == 6
+    assert slots_used(iterated_greedy(H, smallest_last(H), iterations=300, seed=42)) == 5  # 6 -> 5, the optimum
+    # on random graphs it usually finds a shorter frame than natural-order first-fit (47 of these 80)
+    improved = 0
+    for seed in range(80):
+        rng = random.Random(seed)
+        graph = nx.gnp_random_graph(rng.randint(8, 30), rng.choice([0.15, 0.3, 0.5]), seed=seed)
+        start = greedy_first_fit(graph, natural_order(graph))
+        improved += slots_used(iterated_greedy(graph, start, iterations=300, seed=42)) < slots_used(start)
+    assert improved >= 40
+
+
+def test_iterated_greedy_cannot_escape_rigid_colour_classes():
+    # In the "crown" graph the classes {a_i, b_i} are pairs that first-fit keeps together in EVERY class
+    # order, so this 3-slot colouring is a fixed point even though 2 slots suffice. That limit is
+    # why the optimizer also runs a portfolio of other heuristics and, if needed, the exact search.
+    crown = nx.Graph((f"a{i}", f"b{j}") for i in (1, 2, 3) for j in (1, 2, 3) if i != j)
+    unlucky = greedy_first_fit(crown, ["a1", "b1", "a2", "b2", "a3", "b3"])
+    assert slots_used(unlucky) == 3
+    assert slots_used(iterated_greedy(crown, unlucky, iterations=300, seed=42)) == 3
+    assert slots_used(dsatur(crown)) == 2 and slots_used(rlf(crown)) == 2
+
+
+def test_iterated_greedy_is_deterministic_for_a_seed_and_the_seed_matters():
+    _, H = build_graphs("grid16_300m")
+    start = dsatur(H)
+    same_a = list(iterated_greedy_passes(H, start, 30, seed=7))
+    same_b = list(iterated_greedy_passes(H, start, 30, seed=7))
+    other = list(iterated_greedy_passes(H, start, 30, seed=8))
+    assert same_a == same_b and same_a != other
+
+
+def test_iterated_greedy_with_no_iterations_returns_a_copy_of_the_start():
+    _, H = build_graphs("hidden_terminal3")
+    start = dsatur(H)
+    result = iterated_greedy(H, start, iterations=0)
+    assert result == start and result is not start
+
+
+def test_iterated_greedy_reorders_whole_classes_the_way_the_spec_says(monkeypatch):
+    # A complete multipartite graph keeps its colour classes (the parts) intact from pass to pass, so
+    # the order of every pass can be predicted. Parts: P0={n1}  P1={n2,n3,n4}  P2={n5,n6}  P3={n7,n8}.
+    graph = nx.relabel_nodes(nx.complete_multipartite_graph(1, 3, 2, 2), {i: f"n{i + 1}" for i in range(8)})
+    start = {"n1": 0, "n2": 1, "n3": 1, "n4": 1, "n5": 2, "n6": 2, "n7": 3, "n8": 3}
+    assert is_proper(graph, start)
+    seen_orders, shuffled = [], []
+    real_greedy = heuristics.greedy_first_fit
+
+    def spy(H, order):
+        seen_orders.append(list(order))
+        return real_greedy(H, order)
+
+    class ScriptedRandom:
+        """random() answers 0.1, 0.6, 0.9 in turn: the 'largest first', 'reverse' and 'shuffle' branches."""
+
+        def __init__(self, seed):
+            self.answers = iter([0.1, 0.6, 0.9])
+
+        def random(self):
+            return next(self.answers)
+
+        def shuffle(self, items):
+            shuffled.append(list(items))
+            items.reverse()  # a fixed, predictable "shuffle"
+
+    monkeypatch.setattr(heuristics, "greedy_first_fit", spy)
+    monkeypatch.setattr(heuristics, "random", types.SimpleNamespace(Random=ScriptedRandom))
+    passes = list(iterated_greedy_passes(graph, start, iterations=3, seed=0))
+
+    # pass 1, r = 0.1: largest class first; the equal-sized P2 and P3 keep the lower slot number first
+    assert seen_orders[0] == ["n2", "n3", "n4", "n5", "n6", "n7", "n8", "n1"]
+    assert [passes[0][n] for n in ("n2", "n5", "n7", "n1")] == [0, 1, 2, 3]  # the classes now sit in slots 0..3 in that order
+    # pass 2, r = 0.6: the class order of the new colouring (P1, P2, P3, P0) is reversed
+    assert seen_orders[1] == ["n1", "n7", "n8", "n5", "n6", "n2", "n3", "n4"]
+    # pass 3, r = 0.9: rng.shuffle() gets the classes in slot order (P0, P3, P2, P1)
+    assert shuffled == [[["n1"], ["n7", "n8"], ["n5", "n6"], ["n2", "n3", "n4"]]]
+    assert seen_orders[2] == ["n2", "n3", "n4", "n5", "n6", "n7", "n8", "n1"]
+    assert all(is_proper(graph, colouring) and slots_used(colouring) == 4 for colouring in passes)  # the parts never split

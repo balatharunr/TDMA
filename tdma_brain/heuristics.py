@@ -1,16 +1,22 @@
-"""Colouring heuristics that turn a conflict graph into time slots (created in Division 2).
+"""Colouring heuristics that turn a conflict graph into time slots (Divisions 2 and 3).
 
 A colouring gives every radio a slot number so that radios joined by an edge never share
 one. Everything here is deterministic: ties are broken by natural node order (Node_2 before
-Node_10) and no Python hash order is used, so the same input gives the same output on every
-run. Division 3 adds the other heuristics (RLF, smallest-last, ...) to this module.
+Node_10), the only randomness is a seeded random.Random, and no Python hash order is used, so
+the same input gives the same output on every run.
 """
+import random
+
 from .io_utils import natural_key
 
 DSATUR_NAME = "DSATUR"
+RLF_NAME = "RLF"
+SMALLEST_LAST_NAME = "smallest_last"
+LARGEST_FIRST_NAME = "largest_first (Welsh-Powell)"
 GREEDY_NAME = "greedy (natural order)"
 NAIVE_D1_NAME = "naive-d1"
-ALGORITHM_KEYS = ("dsatur", "greedy", "naive-d1")  # the values of the CLI's --algorithm
+# the values of the CLI's --algorithm (besides "auto"); the first five are the optimizer's portfolio
+ALGORITHM_KEYS = ("dsatur", "rlf", "smallest_last", "largest_first", "greedy", "naive-d1")
 
 
 def greedy_first_fit(H, order):
@@ -55,6 +61,109 @@ def dsatur(H):
     return colour
 
 
+def largest_first(H):
+    """Welsh-Powell (1967): first-fit with the most-conflicted radios (highest H-degree) first.
+
+    Ties in degree go to the earlier node in natural order.
+    """
+    # CONCEPT: Welsh-Powell (largest-first) / smallest-last orderings - radios with the most conflicts are placed first, while the frame still has plenty of free slots
+    order = sorted(H.nodes, key=lambda v: (-H.degree(v), natural_key(v)))
+    return greedy_first_fit(H, order)
+
+
+def smallest_last(H):
+    """Matula-Beck (1983) smallest-last (degeneracy) ordering, then first-fit.
+
+    Repeatedly take out the radio with the fewest conflicts among those left (ties: earliest
+    in natural order); then colour in the reverse of the removal order.
+    """
+    rank = {v: i for i, v in enumerate(sorted(H.nodes, key=natural_key))}
+    degree = {v: H.degree(v) for v in rank}
+    remaining = set(rank)
+    removal = []
+    while remaining:
+        # CONCEPT: Welsh-Powell (largest-first) / smallest-last orderings - peel off the least-connected radio again and again; the radios peeled last are the densest core and are coloured first
+        v = min(remaining, key=lambda x: (degree[x], rank[x]))
+        removal.append(v)
+        remaining.remove(v)
+        for u in H[v]:
+            if u in remaining:
+                degree[u] -= 1
+    return greedy_first_fit(H, reversed(removal))
+
+
+def rlf(H):
+    """Recursive Largest First (Leighton 1979): build one slot at a time, packing it full.
+
+    The first radio of a slot is the one with the most uncoloured neighbours. Then, among the
+    radios that can still join, take the one with the most neighbours in the blocked set (the
+    radios that conflict with the slot and must wait), then the one with the fewest neighbours
+    among the remaining candidates; ties go to the earlier node in natural order.
+    Returns {node: slot} with slots numbered in the order they were built.
+    """
+    rank = {v: i for i, v in enumerate(sorted(H.nodes, key=natural_key))}
+    neighbours = {v: set(H[v]) for v in rank}
+    uncoloured = set(rank)
+    colour = {}
+    slot = 0
+    while uncoloured:
+        candidates = set(uncoloured)  # X: may still join this slot
+        blocked = set()  # Y: conflict with a radio already in this slot, so they wait for a later slot
+        v = max(candidates, key=lambda x: (len(neighbours[x] & uncoloured), -rank[x]))
+        members = []
+        while True:
+            members.append(v)
+            # CONCEPT: RLF (Recursive Largest First) - v joins the slot; its neighbours can no longer join it, so they move from the candidates X into the blocked set Y
+            blocked |= neighbours[v] & candidates
+            candidates -= {v} | neighbours[v]
+            if not candidates:
+                break
+            v = max(candidates, key=lambda x: (len(neighbours[x] & blocked), -len(neighbours[x] & candidates), -rank[x]))
+        for member in members:
+            colour[member] = slot
+        uncoloured -= set(members)
+        slot += 1
+    return colour
+
+
+def iterated_greedy_passes(H, start, iterations=300, seed=42):
+    """Culberson and Luo's iterated greedy (1996), yielding the colouring of every pass.
+
+    Each pass re-runs first-fit with the colour classes of the previous colouring kept
+    together in a new order (largest first, reversed, or shuffled by a seeded random.Random).
+    A theorem says a pass never needs more slots than the colouring it started from; this
+    raises RuntimeError if that ever fails, which would mean a bug.
+    """
+    rng = random.Random(seed)
+    current = dict(start)
+    for _ in range(iterations):
+        slots = sorted(set(current.values()))
+        classes = [sorted((v for v in current if current[v] == s), key=natural_key) for s in slots]
+        # CONCEPT: Iterated greedy (Culberson) - first-fit fed with WHOLE colour classes in a new order can never need more slots, and a lucky order often needs one fewer
+        r = rng.random()
+        if r < 0.5:
+            classes.sort(key=len, reverse=True)  # largest class first; the sort is stable, so ties keep the lower slot first
+        elif r < 0.8:
+            classes.reverse()
+        else:
+            rng.shuffle(classes)
+        new = greedy_first_fit(H, [v for group in classes for v in group])
+        if len(set(new.values())) > len(set(current.values())):
+            raise RuntimeError("iterated greedy used more slots than its input: this contradicts Culberson's theorem")
+        current = new
+        yield new
+
+
+def iterated_greedy(H, start, iterations=300, seed=42):
+    """The best colouring seen during iterated_greedy_passes(); never worse than `start`."""
+    best = dict(start)
+    best_slots = len(set(best.values()))
+    for colouring in iterated_greedy_passes(H, start, iterations, seed):
+        if len(set(colouring.values())) < best_slots:
+            best, best_slots = colouring, len(set(colouring.values()))
+    return best
+
+
 def naive_distance1(G):
     """INTENTIONALLY UNSAFE. FOR DEMOS AND THE DIVISION 8 EXPERIMENT ONLY.
 
@@ -75,6 +184,12 @@ def run_algorithm(key, G, H):
     """
     if key == "dsatur":
         return DSATUR_NAME, dsatur(H)
+    if key == "rlf":
+        return RLF_NAME, rlf(H)
+    if key == "smallest_last":
+        return SMALLEST_LAST_NAME, smallest_last(H)
+    if key == "largest_first":
+        return LARGEST_FIRST_NAME, largest_first(H)
     if key == "greedy":
         return GREEDY_NAME, greedy_first_fit(H, sorted(H.nodes, key=natural_key))
     if key == "naive-d1":
