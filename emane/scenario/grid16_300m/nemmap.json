@@ -1,0 +1,98 @@
+{
+  "Node_01": {
+    "nem": 1,
+    "netns": "node01",
+    "backchan_ip": "10.99.0.1",
+    "radio_ip": "10.100.0.1"
+  },
+  "Node_02": {
+    "nem": 2,
+    "netns": "node02",
+    "backchan_ip": "10.99.0.2",
+    "radio_ip": "10.100.0.2"
+  },
+  "Node_03": {
+    "nem": 3,
+    "netns": "node03",
+    "backchan_ip": "10.99.0.3",
+    "radio_ip": "10.100.0.3"
+  },
+  "Node_04": {
+    "nem": 4,
+    "netns": "node04",
+    "backchan_ip": "10.99.0.4",
+    "radio_ip": "10.100.0.4"
+  },
+  "Node_05": {
+    "nem": 5,
+    "netns": "node05",
+    "backchan_ip": "10.99.0.5",
+    "radio_ip": "10.100.0.5"
+  },
+  "Node_06": {
+    "nem": 6,
+    "netns": "node06",
+    "backchan_ip": "10.99.0.6",
+    "radio_ip": "10.100.0.6"
+  },
+  "Node_07": {
+    "nem": 7,
+    "netns": "node07",
+    "backchan_ip": "10.99.0.7",
+    "radio_ip": "10.100.0.7"
+  },
+  "Node_08": {
+    "nem": 8,
+    "netns": "node08",
+    "backchan_ip": "10.99.0.8",
+    "radio_ip": "10.100.0.8"
+  },
+  "Node_09": {
+    "nem": 9,
+    "netns": "node09",
+    "backchan_ip": "10.99.0.9",
+    "radio_ip": "10.100.0.9"
+  },
+  "Node_10": {
+    "nem": 10,
+    "netns": "node10",
+    "backchan_ip": "10.99.0.10",
+    "radio_ip": "10.100.0.10"
+  },
+  "Node_11": {
+    "nem": 11,
+    "netns": "node11",
+    "backchan_ip": "10.99.0.11",
+    "radio_ip": "10.100.0.11"
+  },
+  "Node_12": {
+    "nem": 12,
+    "netns": "node12",
+    "backchan_ip": "10.99.0.12",
+    "radio_ip": "10.100.0.12"
+  },
+  "Node_13": {
+    "nem": 13,
+    "netns": "node13",
+    "backchan_ip": "10.99.0.13",
+    "radio_ip": "10.100.0.13"
+  },
+  "Node_14": {
+    "nem": 14,
+    "netns": "node14",
+    "backchan_ip": "10.99.0.14",
+    "radio_ip": "10.100.0.14"
+  },
+  "Node_15": {
+    "nem": 15,
+    "netns": "node15",
+    "backchan_ip": "10.99.0.15",
+    "radio_ip": "10.100.0.15"
+  },
+  "Node_16": {
+    "nem": 16,
+    "netns": "node16",
+    "backchan_ip": "10.99.0.16",
+    "radio_ip": "10.100.0.16"
+  }
+}
