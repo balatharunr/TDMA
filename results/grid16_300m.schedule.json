@@ -20,8 +20,8 @@
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
   ],
-  "lower_bound": null,
-  "optimality": null,
+  "lower_bound": 9,
+  "optimality": "PROVEN_OPTIMAL_BY_BOUND",
   "algorithm": "DSATUR",
   "verified": true
 }
